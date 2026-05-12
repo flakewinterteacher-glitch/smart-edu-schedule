@@ -1,5 +1,3 @@
-import React from 'react'
-
 export default function BreakCell() {
   return (
     <td className="p-0 border-b border-r border-slate-200 bg-slate-200/50 align-middle min-w-20 max-w-25 select-none cursor-grab">

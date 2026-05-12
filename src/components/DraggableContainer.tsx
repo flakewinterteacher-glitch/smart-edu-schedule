@@ -1,33 +1,53 @@
-import React, { useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import type { ReactNode, MouseEvent } from 'react'
 
-export default function DraggableContainer({ children, className }) {
-  const scrollRef = useRef(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [startX, setStartX] = useState(0)
-  const [startY, setStartY] = useState(0)
-  const [scrollLeft, setScrollLeft] = useState(0)
-  const [scrollTop, setScrollTop] = useState(0)
+interface Props {
+  children: ReactNode
+  className?: string
+}
 
-  const startDrag = (e) => {
-    // ป้องกันการลากถ้าผู้ใช้คลิกที่ช่องพิมพ์ข้อความ (Input) หรือปุ่ม (Button)
-    if (['INPUT', 'BUTTON', 'TEXTAREA'].includes(e.target.tagName)) return
+export default function DraggableContainer({
+  children,
+  className = '',
+}: Props) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [isDown, setIsDown] = useState<boolean>(false)
+  const [startX, setStartX] = useState<number>(0)
+  const [startY, setStartY] = useState<number>(0)
+  const [scrollLeft, setScrollLeft] = useState<number>(0)
+  const [scrollTop, setScrollTop] = useState<number>(0)
 
-    setIsDragging(true)
+  const handleMouseDown = (e: MouseEvent<HTMLDivElement>) => {
+    setIsDown(true)
+    // 🌟 ดักเช็ค Null ป้องกัน Vercel โวยวาย
+    if (!scrollRef.current) return
+
     setStartX(e.pageX - scrollRef.current.offsetLeft)
     setStartY(e.pageY - scrollRef.current.offsetTop)
     setScrollLeft(scrollRef.current.scrollLeft)
     setScrollTop(scrollRef.current.scrollTop)
   }
 
-  const stopDrag = () => setIsDragging(false)
+  const handleMouseLeave = () => {
+    setIsDown(false)
+  }
 
-  const onDrag = (e) => {
-    if (!isDragging) return
+  const handleMouseUp = () => {
+    setIsDown(false)
+  }
+
+  const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
+    if (!isDown) return
     e.preventDefault()
+
+    // 🌟 ดักเช็ค Null ก่อนใช้งาน
+    if (!scrollRef.current) return
+
     const x = e.pageX - scrollRef.current.offsetLeft
     const y = e.pageY - scrollRef.current.offsetTop
-    const walkX = (x - startX) * 1.5 // ความเร็วในการเลื่อนแนวนอน
-    const walkY = (y - startY) * 1.5 // ความเร็วในการเลื่อนแนวตั้ง
+    const walkX = (x - startX) * 1.5 // ความเร็วในการลาก
+    const walkY = (y - startY) * 1.5
+
     scrollRef.current.scrollLeft = scrollLeft - walkX
     scrollRef.current.scrollTop = scrollTop - walkY
   }
@@ -35,12 +55,11 @@ export default function DraggableContainer({ children, className }) {
   return (
     <div
       ref={scrollRef}
-      onMouseDown={startDrag}
-      onMouseLeave={stopDrag}
-      onMouseUp={stopDrag}
-      onMouseMove={onDrag}
-      /* min-h-0 คือพระเอกที่ทำให้ Scrollbar แนวตั้งทำงาน และเห็นวันศุกร์! */
-      className={`overflow-auto min-h-0 w-full ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'} ${className}`}
+      className={className}
+      onMouseDown={handleMouseDown}
+      onMouseLeave={handleMouseLeave}
+      onMouseUp={handleMouseUp}
+      onMouseMove={handleMouseMove}
     >
       {children}
     </div>
