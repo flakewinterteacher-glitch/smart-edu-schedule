@@ -12,7 +12,6 @@ export default defineConfig([
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
-      'react-compiler': reactCompiler,
     },
     languageOptions: {
       globals: globals.browser,
@@ -22,7 +21,7 @@ export default defineConfig([
       ...js.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
-      'react-compiler/report': 'error', // บังคับใช้กฎของ React Compiler
+      'react-hooks/react-compiler': 'error', // ใช้กฎของ React Compiler ผ่านปลั๊กอิน react-hooks
     },
   },
 ])
