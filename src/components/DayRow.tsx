@@ -4,6 +4,7 @@ import type {
   ScheduleEntry,
   ConflictRecord,
   MasterData,
+  SubstituteRecord,
 } from '@/types'
 
 interface Props {
@@ -21,6 +22,7 @@ interface Props {
   globalConflicts: ConflictRecord[]
   viewMode: 'teacher' | 'student'
   masterData: MasterData
+  substitutes: SubstituteRecord[] // รับค่าสอนแทนมาด้วย
 }
 
 export default function DayRow({
@@ -32,6 +34,7 @@ export default function DayRow({
   globalConflicts,
   viewMode,
   masterData,
+  substitutes,
 }: Props) {
   return (
     <tr className="hover:bg-slate-50/50 transition-colors group/row">
@@ -73,17 +76,18 @@ export default function DayRow({
           }
         }
 
+        // 🌟 แก้ไข: เติม type ({} as Partial<ScheduleEntry>) ให้ TS รู้จัก
         const cellData =
           viewMode === 'student'
             ? scheduleData.find(
                 (d) => d.dayId === day.id && d.timeIndex === timeIndex
-              ) || {}
+              ) || ({} as Partial<ScheduleEntry>)
             : scheduleData.find(
                 (d) =>
                   d.dayId === day.id &&
                   d.timeIndex === timeIndex &&
                   d.tabId === tabId
-              ) || {}
+              ) || ({} as Partial<ScheduleEntry>)
 
         const conflictRecord =
           viewMode === 'teacher'
@@ -94,6 +98,16 @@ export default function DayRow({
                   c.tabId === tabId
               )
             : null
+
+        // 🌟 แก้ไข: ดึง tabId แบบปลอดภัย
+        const activeTabIdForSub =
+          viewMode === 'teacher' ? tabId : cellData.tabId || ''
+        const substituteRecord = substitutes.find(
+          (s) =>
+            s.dayId === day.id &&
+            s.timeIndex === timeIndex &&
+            s.absentTeacherTabId === activeTabIdForSub
+        )
 
         return (
           <td
@@ -113,6 +127,7 @@ export default function DayRow({
               dayTheme={day}
               viewMode={viewMode}
               masterData={masterData}
+              substituteRecord={substituteRecord}
             />
           </td>
         )

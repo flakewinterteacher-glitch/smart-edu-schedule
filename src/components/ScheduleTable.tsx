@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import DayRow from '@/components/DayRow'
 import { DAYS_OF_WEEK } from '@/constants/config'
 import type {
@@ -9,6 +9,7 @@ import type {
   HeaderConfig,
   MasterData,
   DayTheme,
+  SubstituteRecord,
 } from '@/types'
 
 interface Props {
@@ -30,6 +31,7 @@ interface Props {
   signatures: SignaturesConfig
   headerConfig: HeaderConfig
   masterData: MasterData
+  substitutes: SubstituteRecord[] // รับค่าสอนแทนมาด้วย
 }
 
 export default function ScheduleTable({
@@ -45,6 +47,7 @@ export default function ScheduleTable({
   signatures,
   headerConfig,
   masterData,
+  substitutes,
 }: Props) {
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [draggedCol, setDraggedCol] = useState<number | null>(null)
@@ -133,7 +136,6 @@ export default function ScheduleTable({
                 periodName.includes('Homeroom') || periodName.includes('พัก')
 
               return (
-                // 🌟 ลบคำว่า relative ออก เพื่อไม่ให้ตีกับ sticky ตามที่ Tailwind แจ้งเตือน
                 <th
                   key={index}
                   draggable={viewMode === 'teacher'}
@@ -234,7 +236,6 @@ export default function ScheduleTable({
           </tr>
         </thead>
         <tbody>
-          {/* 🌟 ระบุ Type ให้ parameter 'day' ใน map */}
           {DAYS_OF_WEEK.map((day: DayTheme) => (
             <DayRow
               key={day.id}
@@ -246,6 +247,7 @@ export default function ScheduleTable({
               updateData={updateData}
               globalConflicts={globalConflicts}
               masterData={masterData}
+              substitutes={substitutes}
             />
           ))}
         </tbody>

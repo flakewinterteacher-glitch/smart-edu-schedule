@@ -1,5 +1,3 @@
-// src/types/index.ts
-
 export interface Tab {
   id: string
   name: string
@@ -53,4 +51,16 @@ export interface DayTheme {
   id: string
   name: string
   theme: string
+}
+
+// 🌟 ตัวใหม่: ระบบจัดการสอนแทน
+export interface SubstituteRecord {
+  id: string
+  dayId: string
+  timeIndex: number
+  absentTeacherTabId: string
+  absentTeacherName: string
+  subject: string
+  room: string
+  subTeacherName: string
 }

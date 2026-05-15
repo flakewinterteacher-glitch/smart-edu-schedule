@@ -1,9 +1,12 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import ScheduleTable from '@/components/ScheduleTable'
 import TeacherManager from '@/components/TeacherManager'
 import SignatureManager from '@/components/SignatureManager'
 import HeaderManager from '@/components/HeaderManager'
 import DataManager from '@/components/DataManager'
+import Dashboard from '@/components/Dashboard'
+import WorkloadStatusBar from '@/components/WorkloadStatusBar'
+import SubstituteManager from '@/components/SubstituteManager'
 import { INITIAL_TIME_SLOTS } from '@/constants/config'
 import type {
   Tab,
@@ -13,6 +16,7 @@ import type {
   Signature,
   HeaderConfig,
   MasterData,
+  SubstituteRecord,
 } from '@/types'
 
 const loadSaved = <T,>(key: string, defaultVal: T): T => {
@@ -44,11 +48,14 @@ const getDefaultFixedSchedule = (tabId: string): ScheduleEntry[] => [
 ]
 
 export default function App() {
-  const [viewMode, setViewMode] = useState<'teacher' | 'student'>('teacher')
+  const [viewMode, setViewMode] = useState<'teacher' | 'student' | 'dashboard'>(
+    'teacher'
+  )
   const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false)
   const [isSigOpen, setIsSigOpen] = useState<boolean>(false)
   const [isHeaderOpen, setIsHeaderOpen] = useState<boolean>(false)
   const [isDataOpen, setIsDataOpen] = useState<boolean>(false)
+  const [isSubOpen, setIsSubOpen] = useState<boolean>(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [tabs, setTabs] = useState<Tab[]>(() =>
@@ -65,6 +72,9 @@ export default function App() {
       'edu-scheduleData',
       getDefaultFixedSchedule('tab-1')
     )
+  )
+  const [substitutes, setSubstitutes] = useState<SubstituteRecord[]>(() =>
+    loadSaved<SubstituteRecord[]>('edu-substitutes', [])
   )
 
   const [signatures, setSignatures] = useState<SignaturesConfig>(() =>
@@ -110,6 +120,7 @@ export default function App() {
     localStorage.setItem('edu-signatures', JSON.stringify(signatures))
     localStorage.setItem('edu-headerConfig', JSON.stringify(headerConfig))
     localStorage.setItem('edu-masterData', JSON.stringify(masterData))
+    localStorage.setItem('edu-substitutes', JSON.stringify(substitutes))
   }, [
     tabs,
     timeSlots,
@@ -118,6 +129,7 @@ export default function App() {
     signatures,
     headerConfig,
     masterData,
+    substitutes,
   ])
 
   const handleExport = () => {
@@ -128,6 +140,7 @@ export default function App() {
       signatures,
       headerConfig,
       masterData,
+      substitutes,
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: 'application/json',
@@ -146,7 +159,6 @@ export default function App() {
     const reader = new FileReader()
     reader.onload = (event) => {
       try {
-        // 🌟 ป้องกัน undefined
         const result = event.target?.result
         if (typeof result !== 'string') return
 
@@ -159,6 +171,7 @@ export default function App() {
           if (data.signatures) setSignatures(data.signatures)
           if (data.headerConfig) setHeaderConfig(data.headerConfig)
           if (data.masterData) setMasterData(data.masterData)
+          if (data.substitutes) setSubstitutes(data.substitutes)
           alert('📥 โหลดข้อมูลตารางสอนสำเร็จแล้ว!')
         } else {
           alert('❌ ไฟล์ไม่ถูกต้อง หรือไม่ใช่ไฟล์ Backup ของระบบนี้')
@@ -181,6 +194,7 @@ export default function App() {
       setTimeSlots(INITIAL_TIME_SLOTS)
       setScheduleData(getDefaultFixedSchedule('tab-1'))
       setActiveTabId('tab-1')
+      setSubstitutes([])
     }
   }
 
@@ -216,6 +230,15 @@ export default function App() {
               : d
           )
       )
+      setSubstitutes((prev) =>
+        prev
+          .filter((s) => s.timeIndex !== indexToRemove)
+          .map((s) =>
+            s.timeIndex > indexToRemove
+              ? { ...s, timeIndex: s.timeIndex - 1 }
+              : s
+          )
+      )
     }
   }
   const moveTimeSlot = (fromIndex: number, toIndex: number) => {
@@ -242,6 +265,24 @@ export default function App() {
         return d
       })
     )
+    setSubstitutes((prev) =>
+      prev.map((s) => {
+        if (s.timeIndex === fromIndex) return { ...s, timeIndex: toIndex }
+        if (
+          fromIndex < toIndex &&
+          s.timeIndex > fromIndex &&
+          s.timeIndex <= toIndex
+        )
+          return { ...s, timeIndex: s.timeIndex - 1 }
+        if (
+          fromIndex > toIndex &&
+          s.timeIndex >= toIndex &&
+          s.timeIndex < fromIndex
+        )
+          return { ...s, timeIndex: s.timeIndex + 1 }
+        return s
+      })
+    )
   }
   const updateScheduleData = (
     tabId: string,
@@ -257,7 +298,6 @@ export default function App() {
       )
       if (existingIndex >= 0) {
         const newData = [...prev]
-        // 🌟 บังคับ Type กัน Error ตอน Update
         newData[existingIndex] = {
           ...newData[existingIndex],
           [field]: value,
@@ -335,6 +375,22 @@ export default function App() {
       }
     })
 
+    // 🌟 รวมข้อมูลสอนแทนเข้าไปเช็คตารางชนด้วย
+    substitutes.forEach((sub) => {
+      const timeKey = `${sub.dayId}-${sub.timeIndex}`
+      if (sub.subTeacherName && sub.subTeacherName.trim() !== '') {
+        if (!teacherTracker[timeKey]) teacherTracker[timeKey] = {}
+        if (!teacherTracker[timeKey][sub.subTeacherName])
+          teacherTracker[timeKey][sub.subTeacherName] = []
+        // สร้าง record จำลองเพื่อเช็ค conflict
+        teacherTracker[timeKey][sub.subTeacherName].push({
+          tabId: sub.absentTeacherTabId,
+          dayId: sub.dayId,
+          timeIndex: sub.timeIndex,
+        } as ScheduleEntry)
+      }
+    })
+
     for (const timeKey in teacherTracker) {
       for (const teacher in teacherTracker[timeKey]) {
         if (teacherTracker[timeKey][teacher].length > 1) {
@@ -350,7 +406,7 @@ export default function App() {
               conflicts.push({
                 ...record,
                 type: 'teacher',
-                message: 'ครูสอนซ้ำเวลา',
+                message: 'สอนซ้ำเวลา',
               })
             }
           })
@@ -381,7 +437,7 @@ export default function App() {
       }
     }
     return conflicts
-  }, [scheduleData])
+  }, [scheduleData, substitutes])
 
   const tabsWithConflicts = useMemo(() => {
     return [...new Set(globalConflicts.map((c) => c.tabId))]
@@ -396,18 +452,23 @@ export default function App() {
         {`@media print { @page { size: A4 landscape; margin: 5mm; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } ::-webkit-scrollbar { display: none; } }`}
       </style>
 
-      <header className="bg-white px-6 py-4 flex justify-between items-center shadow-sm z-50 shrink-0 print:hidden">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
+      {/* 🌟 1. แถบ Workload Status ด้านบนสุด */}
+      <WorkloadStatusBar scheduleData={scheduleData} teachers={tabs} />
+
+      {/* 🌟 2. Header ที่ Responsive สำหรับมือถือ */}
+      <header className="bg-white px-4 md:px-6 py-3 md:py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shadow-sm z-50 shrink-0 print:hidden">
+        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+          <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg md:text-xl shrink-0">
             ES
           </div>
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 overflow-x-auto w-full md:w-auto scrollbar-hide">
             <button
               onClick={() => {
                 setViewMode('teacher')
                 setActiveTabId(tabs[0]?.id)
               }}
-              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition ${viewMode === 'teacher' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`whitespace-nowrap px-3 md:px-4 py-1.5 rounded-lg text-xs md:text-sm font-bold transition ${viewMode === 'teacher' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
             >
               👨‍🏫 ตารางครู
             </button>
@@ -416,14 +477,20 @@ export default function App() {
                 setViewMode('student')
                 if (studentRooms[0]) setActiveTabId(studentRooms[0].id)
               }}
-              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition ${viewMode === 'student' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`whitespace-nowrap px-3 md:px-4 py-1.5 rounded-lg text-xs md:text-sm font-bold transition ${viewMode === 'student' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
             >
-              🎓 ตารางนักเรียน
+              🎓 นักเรียน
+            </button>
+            <button
+              onClick={() => setViewMode('dashboard')}
+              className={`whitespace-nowrap px-3 md:px-4 py-1.5 rounded-lg text-xs md:text-sm font-bold transition ${viewMode === 'dashboard' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              📊 แดชบอร์ด
             </button>
           </div>
         </div>
 
-        <div className="flex gap-2 items-center flex-wrap justify-end">
+        <div className="flex gap-2 items-center overflow-x-auto w-full pb-1 md:pb-0 md:w-auto justify-start md:justify-end scrollbar-hide">
           {viewMode === 'teacher' && (
             <>
               <input
@@ -435,67 +502,71 @@ export default function App() {
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="text-slate-600 hover:text-indigo-600 px-2 font-medium text-sm transition"
-                title="โหลดข้อมูล Backup"
+                className="whitespace-nowrap text-slate-600 hover:text-indigo-600 px-2 font-medium text-xs md:text-sm transition"
               >
                 📥 Import
               </button>
               <button
                 onClick={handleExport}
-                className="text-slate-600 hover:text-emerald-600 px-2 font-medium text-sm transition border-r border-slate-300 pr-4"
-                title="เซฟข้อมูลเก็บไว้"
+                className="whitespace-nowrap text-slate-600 hover:text-emerald-600 px-2 font-medium text-xs md:text-sm transition border-r border-slate-300 pr-4"
               >
                 📤 Export
               </button>
 
               <button
+                onClick={() => setIsSubOpen(true)}
+                className="whitespace-nowrap bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold hover:bg-indigo-700 transition shadow-sm text-xs md:text-sm ml-1 ring-2 ring-indigo-300 ring-offset-1 animate-pulse"
+              >
+                🔄 จัดสอนแทน
+              </button>
+              <button
                 onClick={() => setIsDataOpen(true)}
-                className="bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg font-bold hover:bg-indigo-100 transition border border-indigo-200 text-sm ml-2"
+                className="whitespace-nowrap bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg font-bold hover:bg-indigo-100 transition border border-indigo-200 text-xs md:text-sm ml-2"
               >
                 🗂️ ฐานข้อมูล
               </button>
               <button
                 onClick={() => setIsHeaderOpen(true)}
-                className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg font-bold hover:bg-slate-200 transition border border-slate-300 text-sm ml-1"
+                className="whitespace-nowrap bg-slate-100 text-slate-700 px-3 py-2 rounded-lg font-bold hover:bg-slate-200 transition border border-slate-300 text-xs md:text-sm ml-1"
               >
-                🏫 ตั้งค่าหัวกระดาษ
+                🏫 หัวกระดาษ
               </button>
               <button
                 onClick={() => setIsSigOpen(true)}
-                className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg font-bold hover:bg-slate-200 transition border border-slate-300 text-sm ml-1"
+                className="whitespace-nowrap bg-slate-100 text-slate-700 px-3 py-2 rounded-lg font-bold hover:bg-slate-200 transition border border-slate-300 text-xs md:text-sm ml-1"
               >
-                ✍️ ตั้งค่าลายเซ็น
+                ✍️ ลายเซ็น
               </button>
               <button
                 onClick={() => setIsManagerOpen(true)}
-                className="bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg font-bold hover:bg-indigo-100 transition border border-indigo-200 text-sm ml-1"
+                className="whitespace-nowrap bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg font-bold hover:bg-indigo-100 transition border border-indigo-200 text-xs md:text-sm ml-1"
               >
                 👤 จัดการครู
               </button>
               <button
                 onClick={addTimeSlot}
-                className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg font-bold hover:bg-emerald-100 transition border border-emerald-200 text-sm ml-1"
+                className="whitespace-nowrap bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg font-bold hover:bg-emerald-100 transition border border-emerald-200 text-xs md:text-sm ml-1"
               >
                 ⏳ เพิ่มเวลา
               </button>
               <button
                 onClick={addTeacher}
-                className="bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold hover:bg-indigo-700 transition shadow-sm text-sm ml-1"
+                className="whitespace-nowrap bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold hover:bg-indigo-700 transition shadow-sm text-xs md:text-sm ml-1"
               >
-                ➕ สร้างตารางใหม่
+                ➕ ตารางใหม่
               </button>
             </>
           )}
           <button
             onClick={() => window.print()}
-            className="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold hover:bg-slate-900 transition shadow-sm flex items-center gap-2 text-sm ml-2"
+            className="whitespace-nowrap bg-slate-800 text-white px-3 md:px-4 py-2 rounded-lg font-bold hover:bg-slate-900 transition shadow-sm flex items-center gap-2 text-xs md:text-sm ml-1"
           >
             🖨️ ปริ้นต์
           </button>
           {viewMode === 'teacher' && (
             <button
               onClick={handleClearAll}
-              className="bg-red-50 text-red-600 px-3 py-2 rounded-lg font-bold hover:bg-red-100 transition border border-red-200 text-sm ml-2"
+              className="whitespace-nowrap bg-red-50 text-red-600 px-3 py-2 rounded-lg font-bold hover:bg-red-100 transition border border-red-200 text-xs md:text-sm ml-1"
             >
               🧹 ล้างข้อมูล
             </button>
@@ -503,29 +574,38 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 p-6 overflow-hidden flex flex-col print:p-0 print:overflow-visible print:block">
-        <div className="flex gap-2 flex-wrap mb-4 shrink-0 print:hidden">
-          {currentTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTabId(tab.id)}
-              className={`relative px-5 py-2 rounded-full text-sm font-bold transition-all border ${activeTabId === tab.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'}`}
-            >
-              {tab.name}
-              {viewMode === 'teacher' && tabsWithConflicts.includes(tab.id) && (
-                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border-2 border-white"></span>
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+      <main className="flex-1 p-4 md:p-6 overflow-hidden flex flex-col print:p-0 print:overflow-visible print:block">
+        {viewMode !== 'dashboard' && (
+          <div className="flex gap-2 flex-wrap mb-4 shrink-0 print:hidden">
+            {currentTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTabId(tab.id)}
+                className={`relative px-4 md:px-5 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-bold transition-all border ${activeTabId === tab.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'}`}
+              >
+                {tab.name}
+                {viewMode === 'teacher' &&
+                  tabsWithConflicts.includes(tab.id) && (
+                    <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border-2 border-white"></span>
+                    </span>
+                  )}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {activeTab ? (
+        {viewMode === 'dashboard' ? (
+          <Dashboard
+            scheduleData={scheduleData}
+            teachers={tabs}
+            masterData={masterData}
+          />
+        ) : activeTab ? (
           <ScheduleTable
             tab={activeTab}
-            viewMode={viewMode}
+            viewMode={viewMode as 'teacher' | 'student'}
             timeSlots={timeSlots}
             scheduleData={
               viewMode === 'teacher'
@@ -540,9 +620,10 @@ export default function App() {
             signatures={signatures}
             headerConfig={headerConfig}
             masterData={masterData}
+            substitutes={substitutes}
           />
         ) : (
-          <div className="flex-1 flex items-center justify-center text-slate-400 font-medium print:hidden">
+          <div className="flex-1 flex items-center justify-center text-slate-400 font-medium print:hidden text-center p-4">
             {viewMode === 'student'
               ? "กรุณากรอกชื่อ 'ห้องเรียน' ในหน้าตารางครูก่อน ระบบจะสร้างตารางนักเรียนให้อัตโนมัติครับ"
               : 'ไม่พบข้อมูล'}
@@ -575,6 +656,16 @@ export default function App() {
         onClose={() => setIsDataOpen(false)}
         masterData={masterData}
         setMasterData={setMasterData}
+      />
+      <SubstituteManager
+        isOpen={isSubOpen}
+        onClose={() => setIsSubOpen(false)}
+        timeSlots={timeSlots}
+        scheduleData={scheduleData}
+        teachers={tabs}
+        substitutes={substitutes}
+        setSubstitutes={setSubstitutes}
+        masterData={masterData}
       />
     </div>
   )
