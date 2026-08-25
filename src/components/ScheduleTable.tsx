@@ -31,7 +31,7 @@ interface Props {
   signatures: SignaturesConfig
   headerConfig: HeaderConfig
   masterData: MasterData
-  substitutes: SubstituteRecord[] // รับค่าสอนแทนมาด้วย
+  substitutes: SubstituteRecord[]
 }
 
 export default function ScheduleTable({
@@ -147,35 +147,44 @@ export default function ScheduleTable({
                     setDraggedCol(null)
                     setDragOverCol(null)
                   }}
-                  className={`p-1.5 border border-slate-700 font-medium text-center group sticky top-0 z-30 print:p-1 ${isVerticalColumn ? 'w-14 print:w-[5.5%] bg-slate-700 print:bg-slate-700' : 'print:w-auto bg-slate-800 print:bg-slate-800'} ${dragOverCol === index ? 'border-l-4 border-l-indigo-400 bg-slate-600' : ''}`}
+                  /* ปรับ print:w ให้กว้างขึ้นเล็กน้อยสำหรับช่องแนวตั้ง */
+                  className={`p-1.5 border border-slate-700 font-medium text-center group sticky top-0 z-30 print:p-1 ${isVerticalColumn ? 'w-14 print:w-[6%] bg-slate-700 print:bg-slate-700' : 'print:w-auto bg-slate-800 print:bg-slate-800'} ${dragOverCol === index ? 'border-l-4 border-l-indigo-400 bg-slate-600' : ''}`}
                 >
                   <div className="flex flex-col items-center justify-between h-full gap-1 w-full px-1 py-1">
                     <div className="w-full mb-1">
                       {viewMode === 'teacher' ? (
-                        <input
-                          type="text"
-                          draggable={false}
-                          onDragStart={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                          }}
-                          value={periodName}
-                          onChange={(e) =>
-                            updateTimeSlot(
-                              index,
-                              `${e.target.value}|${time1}|${time2}`
-                            )
-                          }
-                          className="w-full bg-transparent text-center outline-none focus:bg-slate-600 transition text-sm font-bold text-white border-b border-dashed border-slate-500 pb-1 print:p-0 print:border-none print:text-[11px]"
-                        />
+                        <>
+                          {/* ซ่อน Input ตอนพริ้นท์ (print:hidden) */}
+                          <input
+                            type="text"
+                            draggable={false}
+                            onDragStart={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                            }}
+                            value={periodName}
+                            onChange={(e) =>
+                              updateTimeSlot(
+                                index,
+                                `${e.target.value}|${time1}|${time2}`
+                              )
+                            }
+                            className="w-full bg-transparent text-center outline-none focus:bg-slate-600 transition text-sm font-bold text-white border-b border-dashed border-slate-500 pb-1 print:hidden"
+                          />
+                          {/* แสดงเป็น Div ธรรมดาตอนพริ้นท์ เพื่อให้ข้อความปัดบรรทัดได้ (hidden print:block) */}
+                          <div className="hidden print:block text-[11px] font-bold text-white border-b border-slate-500 pb-1 wrap-break-word whitespace-normal leading-tight">
+                            {periodName}
+                          </div>
+                        </>
                       ) : (
-                        <div className="text-sm font-bold text-white border-b border-dashed border-slate-500 pb-1 print:border-slate-500 print:text-[11px]">
+                        <div className="text-sm font-bold text-white border-b border-dashed border-slate-500 pb-1 print:border-slate-500 print:text-[11px] wrap-break-word whitespace-normal leading-tight">
                           {periodName}
                         </div>
                       )}
                     </div>
                     {viewMode === 'teacher' ? (
                       <div className="flex flex-col gap-0.5 w-full">
+                        {/* ซ่อน Input ตอนพริ้นท์ */}
                         <input
                           type="text"
                           draggable={false}
@@ -190,9 +199,15 @@ export default function ScheduleTable({
                               `${periodName}|${e.target.value}|${time2}`
                             )
                           }
-                          className="w-full bg-slate-700/50 print:bg-transparent text-center rounded px-1 py-0.5 outline-none focus:bg-slate-600 transition text-xs text-amber-100 print:p-0 print:text-[9px]"
+                          className="w-full bg-slate-700/50 text-center rounded px-1 py-0.5 outline-none focus:bg-slate-600 transition text-xs text-amber-100 print:hidden"
                           placeholder="เวลาบน..."
                         />
+                        {/* แสดงข้อความตอนพริ้นท์ บีบขนาดอักษรและอนุญาตให้บีบตัวได้ */}
+                        <div className="hidden print:block text-amber-100 print:text-[8.5px] leading-tight tracking-tighter whitespace-nowrap overflow-hidden">
+                          {time1}
+                        </div>
+
+                        {/* ซ่อน Input ตอนพริ้นท์ */}
                         <input
                           type="text"
                           draggable={false}
@@ -207,16 +222,20 @@ export default function ScheduleTable({
                               `${periodName}|${time1}|${e.target.value}`
                             )
                           }
-                          className="w-full bg-slate-700/50 print:bg-transparent text-center rounded px-1 py-0.5 outline-none focus:bg-slate-600 transition text-xs text-amber-100 print:p-0 print:text-[9px]"
+                          className="w-full bg-slate-700/50 text-center rounded px-1 py-0.5 outline-none focus:bg-slate-600 transition text-xs text-amber-100 print:hidden"
                           placeholder="เวลาล่าง..."
                         />
+                        {/* แสดงข้อความตอนพริ้นท์ */}
+                        <div className="hidden print:block text-amber-100 print:text-[8.5px] leading-tight tracking-tighter whitespace-nowrap overflow-hidden">
+                          {time2}
+                        </div>
                       </div>
                     ) : (
                       <div className="flex flex-col w-full text-center gap-0.5">
-                        <div className="text-xs text-amber-100 w-full print:text-[9px]">
+                        <div className="text-xs text-amber-100 w-full print:text-[8.5px] leading-tight tracking-tighter whitespace-nowrap overflow-hidden">
                           {time1}
                         </div>
-                        <div className="text-xs text-amber-100 w-full print:text-[9px]">
+                        <div className="text-xs text-amber-100 w-full print:text-[8.5px] leading-tight tracking-tighter whitespace-nowrap overflow-hidden">
                           {time2}
                         </div>
                       </div>
